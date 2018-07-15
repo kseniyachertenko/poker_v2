@@ -1,6 +1,7 @@
 import itertools
 
-ranks_list = list(map(lambda x: str(x), range(2, 10))) + ['T', 'J', 'Q', 'K', 'A']
+ranks_list = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+hand_length = 5
 
 
 def hand_rank(hand):
@@ -32,23 +33,23 @@ def card_ranks(hand):
     return sorted([get_rank(rank) for rank, suit in hand], reverse=True)
 
 
-def flush(hand, count=5):
+def flush(hand):
     """Возвращает True, если все карты одной масти"""
     groups = get_suit_groups(hand)
-    return bool([suit for suit, group in groups if len(list(group)) >= count])
+    return bool([suit for suit, group in groups.items() if len(group) >= hand_length])
 
 
-def straight(ranks, count=5):
+def straight(ranks):
     """Возвращает list рангов, если отсортированные ранги формируют последовательность 5ти,
     где у 5ти карт ранги идут по порядку (стрит)"""
     result = [ranks[0]]
-    for idx in range(0, len(ranks)):
-        if ranks[idx - 1] - ranks[idx] == 1:
-            result.append(ranks[idx])
-            if len(result) == count:
+    for idx, rank in enumerate(ranks):
+        if ranks[idx - 1] - rank == 1:
+            result.append(rank)
+            if len(result) == hand_length:
                 return result
         else:
-            result = [ranks[idx]]
+            result = [rank]
     return False
 
 
@@ -68,9 +69,10 @@ def two_pair(ranks):
 
 def get_suit_groups(hand):
     """Группы по масти"""
-    def key_func(card):
-        return card[1]
-    return itertools.groupby(sorted(hand, key=key_func), key_func)
+    suits = {'C': [], 'S': [], 'H': [], 'D': []}
+    for idx, card in enumerate(hand):
+        suits[card[1]].append(hand[idx])
+    return suits
 
 
 def get_rank(rank):
@@ -83,7 +85,8 @@ def sort_hand(hand):
 
 def find_last_rank(ranks):
     """Лучший ранг"""
-    return ranks[0] + 1 if ranks[0] < 14 else ranks[-1] - 1
+    max_rank, min_rank = ranks[0], ranks[-1]
+    return max_rank + 1 if max_rank < get_rank('A') else min_rank - 1
 
 
 def jokers_suit(jokers):
@@ -91,53 +94,63 @@ def jokers_suit(jokers):
         'B': 'CS',
         'R': 'HD'
     }
-    return ''.join([equal_suits[card[1]] for card in jokers])
+    return ''.join([equal_suits[suit] for rank, suit in jokers])
+
+
+def get_card(rank, suit):
+    if isinstance(rank, int):
+        rank = get_rank(rank)
+    return rank + suit
 
 
 def get_remain_suits(rank, from_suits, hand):
-    return [suit for suit in from_suits if rank + suit not in hand]
+    return [suit for suit in from_suits if get_card(rank, suit) not in hand]
+
+
+def get_card_straight(hand, count, is_same_suit=False):
+    cards = [hand[0]]
+    for idx, [rank, suit] in enumerate(hand[1:], 1):
+        prev_rank, prev_suit = cards[-1]
+        if get_rank(prev_rank) - get_rank(rank) == 1:
+
+            if is_same_suit and prev_suit != suit:
+                cards.pop()
+
+            cards.append(hand[idx])
+            if len(cards) == count:
+                return cards
+        else:
+            cards = [hand[idx]]
 
 
 def best_hand(hand):
     """Из "руки" в 7 карт возвращает лучшую "руку" в 5 карт """
-    rank, *options = hand_rank(hand)
+    hand_rank_number, *options = hand_rank(hand)
+    hand = sort_hand(hand)
 
-    if rank in [4, 8]:
-        suit = ''
-        if rank == 8:
-            suit = max([idx for idx, group in get_suit_groups(hand)], key=len)
-        result = []
-        options_rank = options[0]
-        for idx in range(options_rank, 1, -1):
-            current_rank = get_rank(idx)
-            if rank == 8:
-                card = [current_rank + suit]
-            else:
-                card = list(filter(lambda curr_card: current_rank in curr_card, hand))
+    if hand_rank_number in [4, 8]:
+        is_same_suit = hand_rank_number == 8
+        return get_card_straight(hand, hand_length, is_same_suit)
 
-            if card and card[0] in hand:
-                result.append(card[0])
-                if len(result) == 5:
-                    return result
-            else:
-                result.clear()
-    elif rank == 5:
-        cards = max([list(group) for idx, group in get_suit_groups(hand)], key=len)
-        return sort_hand(cards)[:5]
+    elif hand_rank_number == 5:
+        cards = max([group for suit, group in get_suit_groups(hand)], key=len)
+        return sort_hand(cards)[:hand_length]
     else:
-        if rank in [6, 7]:
+        if hand_rank_number in [6, 7]:
             ranks = options
-        elif rank in [1, 2, 3]:
-            found_rank, ranks = options
-            if rank != 2:
+        elif hand_rank_number in [1, 2, 3]:
+            found_rank, all_ranks = options
+
+            if hand_rank_number != 2:
                 found_rank = [found_rank]
-            remain_ranks = [rank for rank in ranks if rank not in found_rank][:3]
+
+            remain_ranks = list(set(all_ranks) - set(found_rank))[:3]
             ranks = found_rank + remain_ranks
         else:
-            ranks = options[0][:5]
+            ranks = options[0][:hand_length]
 
         symbol_ranks = [get_rank(rank) for rank in ranks]
-        return list(filter(lambda curr_rank: curr_rank[0] in symbol_ranks, hand))[:5]
+        return list(filter(lambda curr_card: curr_card[0] in symbol_ranks, hand))[:hand_length]
 
 
 def best_wild_hand(hand):
@@ -149,65 +162,66 @@ def best_wild_hand(hand):
     hand = sort_hand(list(set(hand) - set(jokers)))
     jokers_suits, ranks, suits = jokers_suit(jokers), card_ranks(hand), ('H', 'C', 'D', 'S')
 
+    suits = get_suit_groups(hand)
+    max_group_suit = max(suits, key=len)
+
     # 4 одной масти => 8,5
-    if flush(hand, 4):
-        max_group = max([list(group) for idx, group in get_suit_groups(hand)], key=len)
-        suit = max_group[0][1]
+    if len(suits[max_group_suit]) > 3:
+        if max_group_suit in jokers_suits:
+            straight_cards = get_card_straight(suits[max_group_suit], 4)
 
-        if suit in jokers_suits:
-            cards = straight(card_ranks(max_group), 4) or card_ranks(max_group)[:4]
-            cards.append(find_last_rank(cards))
-            return [get_rank(rank) + suit for rank in cards]
+            cards = straight_cards or suits[max_group_suit][:4]
+            last_rank_number = find_last_rank(card_ranks(cards))
+            cards.append(get_card(last_rank_number, max_group_suit))
+            return cards
     # Пара и 2 джокера или 3 одинакового ранга => 7
-    if kind(2, ranks) and len(jokers) == 2 or kind(3, ranks):
-        rank_list = []
-        if kind(3, ranks):
-            rank_list.append(kind(3, ranks))
-        if len(jokers) == 2:
-            rank_list.append(kind(2, ranks))
-
+    rank_list = []
+    if kind(2, ranks) and len(jokers) == 2:
+        rank_list.append(kind(2, ranks))
+    if kind(3, ranks):
+        rank_list.append(kind(3, ranks))
+    if rank_list:
         for rank in sorted(rank_list, reverse=True):
-            allow_suits = get_remain_suits(get_rank(rank), suits, hand)
-            if all(suit in jokers_suits for suit in allow_suits):
-                cards = [get_rank(rank) + suit for suit in suits]
-                cards.append(sort_hand(list(set(hand) - set(cards)))[0])
+            remain_suits = get_remain_suits(get_rank(rank), suits, hand)
+            if all(suit in jokers_suits for suit in remain_suits):
+                cards = [get_card(rank, suit) for suit in suits]
+
+                remain_card = sort_hand(list(set(hand) - set(cards)))[0]
+                cards.append(remain_card)
                 return cards
     # Две пары => 6
     if two_pair(ranks):
-        ranks = two_pair(ranks)
-        cards = list(filter(lambda card: get_rank(card[0]) in ranks, hand))
+        pair_ranks = sorted(two_pair(ranks), reverse=True)
+        cards = [card for card in hand if get_rank(card[0]) in pair_ranks]
 
-        for rank, pair_suits in itertools.groupby(cards, lambda card: card[0]):
-            allow_suits = get_remain_suits(rank, jokers_suits, hand)
-            if allow_suits:
-                cards.append(rank + allow_suits[0])
+        for pair_rank in pair_ranks:
+            remain_suits = get_remain_suits(get_rank(pair_rank), jokers_suits, cards)
+            if remain_suits:
+                cards.append(get_card(pair_rank, remain_suits[0]))
                 return cards
     # 3 подряд и 2 джокера или 4 подряд => 4
-    if straight(ranks, 3) and len(jokers) == 2 or straight(ranks, 4):
-        hand_ranks = card_ranks(hand)
-        ranks = straight(hand_ranks, 3) if len(jokers) == 2 else straight(hand_ranks, 4)
-        cards = [card for card in hand if get_rank(card[0]) in ranks]
-
-        while len(cards) != 5:
-            new_rank = find_last_rank(sorted(ranks, reverse=True))
-            ranks.append(new_rank)
-            cards.append(get_rank(new_rank) + jokers_suits[0])
-        return cards
+    straight_cards = get_card_straight(hand, hand_length - len(jokers))
+    if straight_cards:
+        while len(straight_cards) != hand_length:
+            straight_ranks = card_ranks(sort_hand(straight_cards))
+            new_rank = find_last_rank(straight_ranks)
+            straight_cards.append(get_card(new_rank, jokers_suits[0]))
+        return straight_cards
     # Пара или ничего => 3
     cards = []
-    if kind(2, ranks):
-        rank = get_rank(kind(2, ranks))
-        kind_suits = [card[1] for card in hand if card[0] == rank]
-        last_suit = list(set(jokers_suits) - set(kind_suits))
+    pair_rank = kind(2, ranks)
+    if pair_rank:
+        pair_suits = [suit for rank, suit in hand if rank == get_rank(pair_rank)]
 
-        if last_suit:
-            kind_suits.append(last_suit[0])
-            cards = [rank + suit for suit in kind_suits]
+        remain_suits = list(set(jokers_suits) - set(pair_suits))
+        if remain_suits:
+            pair_suits.append(remain_suits[0])
+            cards = [get_card(pair_rank, suit) for suit in pair_suits]
     else:
-        card = hand[0]
-        cards = [card[0] + suit for suit in jokers_suits if suit != card[1]][:len(jokers)]
-        cards.append(card)
-    return (cards + sort_hand(list(set(hand) - set(cards))))[:5]
+        max_card_rank, max_card_suit = hand[0]
+        cards = [get_card(max_card_rank, suit) for suit in jokers_suits if suit != max_card_suit][:len(jokers)]
+        cards.append(hand[0])
+    return (cards + sort_hand(list(set(hand) - set(cards))))[:hand_length]
 
 
 def test_best_hand():
