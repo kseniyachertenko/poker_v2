@@ -1,7 +1,7 @@
 import itertools
 
-ranks_list = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
-hand_length = 5
+RANKS_LIST = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+HAND_LENGTH = 5
 
 
 def hand_rank(hand):
@@ -30,39 +30,43 @@ def hand_rank(hand):
 def card_ranks(hand):
     """Возвращает список рангов (его числовой эквивалент),
     отсортированный от большего к меньшему"""
-    return sorted([get_rank(rank) for rank, suit in hand], reverse=True)
+    return sorted((get_rank(rank) for rank, suit in hand), reverse=True)
 
 
 def flush(hand):
     """Возвращает True, если все карты одной масти"""
-    return len(set([suit for rank, suit in hand])) == 1
+    suit = hand[0][1]
+    return ''.join(hand).count(suit) == HAND_LENGTH
 
 
 def straight(ranks):
     """Возвращает list рангов, если отсортированные ранги формируют последовательность 5ти,
     где у 5ти карт ранги идут по порядку (стрит)"""
-    for idx, rank in enumerate(ranks[1:], 1):
-        if ranks[idx - 1] - rank != 1:
-            return False
-    return True
+    set_ranks = set(ranks)
+    return len(set_ranks) == HAND_LENGTH and max(ranks) - min(ranks) == HAND_LENGTH - 1
 
 
 def kind(n, ranks):
     """Возвращает первый ранг, который n раз встречается в данной руке.
     Возвращает None, если ничего не найдено"""
-    groups = [rank for rank, group in itertools.groupby(ranks) if len(list(group)) == n]
-    return groups[0] if groups else None
+    for rank in sorted(set(ranks), reverse=True):
+        if ranks.count(rank) == n:
+            return rank
 
 
 def two_pair(ranks):
     """Если есть две пары, то возврщает два соответствующих ранга,
     иначе возвращает None"""
-    pair = [rank for rank, group in itertools.groupby(ranks) if len(list(group)) == 2]
-    return pair if len(pair) == 2 else None
+    pair = []
+    for rank in sorted(set(ranks), reverse=True):
+        if ranks.count(rank) == 2:
+            pair.append(rank)
+            if len(pair) == 2:
+                return pair
 
 
 def get_rank(rank):
-    return ranks_list.index(rank) + 2
+    return RANKS_LIST.index(rank) + 2
 
 
 def create_card(rank, suit):
@@ -93,7 +97,7 @@ def check_hand(cur_rank, cur_options, cur_cards, max_rank, max_options, max_card
 
 
 def best_options_from_hand(hand):
-    groups = itertools.combinations(hand, hand_length)
+    groups = itertools.combinations(hand, HAND_LENGTH)
 
     # max_rank, max_hand_rank_options, max_cards
     max_options = (0, [0, 0], [])
@@ -115,11 +119,11 @@ def jokers_suit(jokers):
         'B': 'CS',
         'R': 'HD'
     }
-    return ''.join([equal_suits[suit] for rank, suit in jokers])
+    return ''.join((equal_suits[suit] for rank, suit in jokers))
 
 
 def cards_from_joker_suit(suit, hand):
-    return [create_card(rank, suit) for rank in ranks_list if create_card(rank, suit) not in hand]
+    return (create_card(rank, suit) for rank in RANKS_LIST if create_card(rank, suit) not in hand)
 
 
 def best_wild_hand(hand):
@@ -138,8 +142,8 @@ def best_wild_hand(hand):
 
     for joker in jokers:
         suits = jokers_suit([joker])
-        new_pair = [create_card(rank, suit) for suit in suits for rank in ranks_list
-                    if create_card(rank, suit) not in hand]
+        new_pair = (create_card(rank, suit) for suit in suits for rank in RANKS_LIST
+                    if create_card(rank, suit) not in hand)
 
         new_cards_pairs.append(new_pair)
 
