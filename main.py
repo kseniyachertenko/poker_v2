@@ -1,30 +1,50 @@
 import itertools
+from enum import Enum
+from functools import total_ordering
 
 RANKS_LIST = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 HAND_LENGTH = 5
+
+
+@total_ordering
+class RankType(Enum):
+    NOTHING = 0
+    PAIR = 1
+    TWO_PAIR = 2
+    SET = 3
+    STRAIGHT = 4
+    FLUSH = 5
+    FULL_HOUSE = 6
+    QUADS = 7
+    STRAIGHT_FLUSH = 8
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
 
 
 def hand_rank(hand):
     """Возвращает значение определяющее ранг 'руки'"""
     ranks = card_ranks(hand)
     if straight(ranks) and flush(hand):
-        return 8, max(ranks)
+        return RankType.STRAIGHT_FLUSH, max(ranks)
     elif kind(4, ranks):
-        return 7, kind(4, ranks), kind(1, ranks)
+        return RankType.QUADS, kind(4, ranks), kind(1, ranks)
     elif kind(3, ranks) and kind(2, ranks):
-        return 6, kind(3, ranks), kind(2, ranks)
+        return RankType.FULL_HOUSE, kind(3, ranks), kind(2, ranks)
     elif flush(hand):
-        return 5, ranks
+        return RankType.FLUSH, ranks
     elif straight(ranks):
-        return 4, max(ranks)
+        return RankType.STRAIGHT, max(ranks)
     elif kind(3, ranks):
-        return 3, kind(3, ranks), ranks
+        return RankType.SET, kind(3, ranks), ranks
     elif two_pair(ranks):
-        return 2, two_pair(ranks), ranks
+        return RankType.TWO_PAIR, two_pair(ranks), ranks
     elif kind(2, ranks):
-        return 1, kind(2, ranks), ranks
+        return RankType.PAIR, kind(2, ranks), ranks
     else:
-        return 0, ranks
+        return RankType.NOTHING, ranks
 
 
 def card_ranks(hand):
@@ -79,15 +99,15 @@ def check_hand(cur_rank, cur_options, cur_cards, max_rank, max_options, max_card
     if cur_rank > max_rank:
         need_update = True
     elif cur_rank == max_rank:
-        if cur_rank in [8, 4]:
+        if cur_rank in [RankType.STRAIGHT_FLUSH, RankType.STRAIGHT]:
             need_update = max_options[0] < cur_options[0]
-        elif cur_rank in [7, 6]:
+        elif cur_rank in [RankType.QUADS, RankType.FULL_HOUSE]:
             max_main_kind, cur_main_kind = max_options[1], cur_options[1]
             need_update = max_main_kind <= cur_main_kind and sum(max_options) < sum(cur_options)
-        elif cur_rank == 5:
+        elif cur_rank == RankType.FLUSH:
             need_update = max_options < cur_options
         else:
-            ranks_idx = 1 if cur_rank in [3, 2, 1] else 0
+            ranks_idx = 1 if cur_rank in [RankType.SET, RankType.TWO_PAIR, RankType.PAIR] else 0
             max_ranks, cur_ranks = max_options[ranks_idx], cur_options[ranks_idx]
             need_update = not max_ranks or sum(max_ranks) < sum(cur_ranks)
 
@@ -100,7 +120,7 @@ def best_options_from_hand(hand):
     groups = itertools.combinations(hand, HAND_LENGTH)
 
     # max_rank, max_hand_rank_options, max_cards
-    max_options = (0, [0, 0], [])
+    max_options = (RankType.NOTHING, [RankType.NOTHING, 0], [])
 
     for group in groups:
         cur_rank, *cur_options = hand_rank(group)
@@ -136,7 +156,7 @@ def best_wild_hand(hand):
     hand = list(set(hand) - set(jokers))
 
     # max_rank, max_hand_rank_options, max_cards
-    max_options = (0, [0, 0], [])
+    max_options = (RankType.NOTHING, [RankType.NOTHING, 0], [])
 
     new_cards_pairs = []
 
